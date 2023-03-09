@@ -1,153 +1,112 @@
-import pandas as pd
-from random import seed
-from random import randrange
-import numpy as np
-from sklearn.metrics import accuracy_score
+import csv
+import random
+import math
 
-df = pd.read_csv('high_diamond_ranked_10min.csv')
-df.info()
-df.head()
-df.describe()
-df.corr()
+# Cargar los datos y separar la variable objetivo de las features
+data = []
+with open('high_diamond_ranked_10min.csv') as file:
+    reader = csv.reader(file)
+    headers = next(reader)
+    for row in reader:
+        data.append(row)
 
-X = df[['blueKills', 'blueTowersDestroyed', 'blueTotalGold', 'blueTotalMinionsKilled']].values
-y = df['blueWins'].values
+features = ['blueKills', 'blueTowersDestroyed', 'blueTotalGold', 'blueTotalMinionsKilled', 'redKills', 'redTowersDestroyed', 'redTotalGold', 'redTotalMinionsKilled']
+target = 'blueWins'
 
-# Dividir los datos en conjunto de entrenamiento y prueba
-def train_test_split(dataset, split=0.8):
-    train = list()
-    train_size = split * len(dataset)
-    dataset_copy = list(dataset)
-    while len(train) < train_size:
-        index = randrange(len(dataset_copy))
-        train.append(dataset_copy.pop(index))
-    return train, dataset_copy
+# Dividir los datos en conjunto de entrenamiento, validación y prueba
+random.shuffle(data)
+train_size = int(0.8 * len(data))
+val_size = test_size = int(0.1 * len(data))
+train_data = data[:train_size]
+val_data = data[train_size:train_size+val_size]
+test_data = data[train_size+val_size:]
 
-# Fijar la semilla aleatoria para reproducibilidad
-seed(42)
+# Función para contar las etiquetas (0 o 1) en un conjunto de datos
+def count_labels(data):
+    counts = [0, 0]
+    for row in data:
+        if len(row) > 0:
+            counts[int(row[0])] += 1
+    return counts
 
-# Dividir los datos en entrenamiento y prueba
-train_data, test_data = train_test_split(list(zip(X, y)))
-X_train = [x[0] for x in train_data]
-y_train = [x[1] for x in train_data]
-X_test = [x[0] for x in test_data]
-y_test = [x[1] for x in test_data]
+# Función para calcular la precisión del modelo en un conjunto de datos
+def accuracy(data, tree):
+    correct = 0
+    for row in data:
+        prediction = classify(row, tree)
+        if prediction == int(row[0]):
+            correct += 1
+    return correct / len(data)
 
-class DecisionTree:
-    def __init__(self, max_depth=10, min_samples_split=2):
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.tree = None
+# Función para construir el árbol de decisión
+def build_tree(data, depth):
+    # Si todos los ejemplos tienen la misma etiqueta, devolver un nodo hoja
+    labels = [int(row[0]) for row in data]
+    if len(set(labels)) == 1:
+        return {'label': labels[0]}
 
-    def fit(self, X, y):
-        self.tree = self._grow_tree(X, y)
+    # Si se llega a la profundidad máxima, devolver un nodo hoja con la etiqueta más común
+    if depth == 0:
+        return {'label': max(set(labels), key=labels.count)}
 
-    def predict(self, X):
-        return [self._predict(inputs, self.tree) for inputs in X]
+    # Encontrar la mejor feature y punto de división
+    best_feature = None
+    best_value = None
+    best_gain = 0
+    for i in range(1, len(data[0])):
+        values = set([float(row[i]) for row in data])
+        for value in values:
+            gain = information_gain(data, i, value)
+            if gain > best_gain:
+                best_feature = i
+                best_value = value
+                best_gain = gain
 
-    def _grow_tree(self, X, y, depth=0):
-        n_samples, n_features = X.shape
-        n_labels = len(set(y))
+    # Dividir el conjunto de datos en dos subconjuntos y construir el árbol recursivamente
+    left_data = [row for row in data if float(row[best_feature]) <= best_value]
+    right_data = [row for row in data if float(row[best_feature]) > best_value]
+    left_tree = build_tree(left_data, depth-1)
+    right_tree = build_tree(right_data, depth-1)
 
-        # Si no hay más ejemplos, devolver un nodo con la etiqueta más común
-        if n_samples == 0:
-            return {'label': self._majority_label(y)}
+    # Devolver un nodo interno con la feature de división y los subárboles izquierdo y derecho
+    return {'feature': headers[best_feature], 'value': best_value, 'left': left_tree, 'right': right_tree}
 
-        # Si todos los ejemplos pertenecen a la misma clase, devolver un nodo con esa etiqueta
-        if n_labels == 1:
-            return {'label': y[0]}
-
-        # Si se alcanza la profundidad máxima, devolver un nodo con la etiqueta más común
-        if depth >= self.max_depth:
-            return {'label': self._majority_label(y)}
-
-        # Si no se cumplen las condiciones anteriores, continuar con la división
-        feature_idxs = np.random.choice(n_features, min(n_features, int(np.ceil(np.sqrt(n_features)))), replace=False)
-        best_feature_idx, best_threshold = self._best_split(X, y, feature_idxs)
-
-        # Si no se encontró una división que mejore la ganancia de información, devolver un nodo con la etiqueta más común
-        if best_feature_idx is None:
-            return {'label': self._majority_label(y)}
-
-        # Si se cumplen las condiciones para hacer una división, continuar con la recursión
-        left_idxs = X[:, best_feature_idx] < best_threshold
-        right_idxs = X[:, best_feature_idx] >= best_threshold
-        left_tree = self._grow_tree(X[left_idxs], y[left_idxs], depth+1)
-        right_tree = self._grow_tree(X[right_idxs], y[right_idxs], depth+1)
-
-        # Devolver un nodo que represente la división realizada
-        return {'feature_idx': best_feature_idx,
-                'threshold': best_threshold,
-                'left': left_tree,
-                'right': right_tree}
-
-
-def _predict(self, inputs, tree):
-    # Si se alcanza una hoja, devolver la etiqueta correspondiente
+def classify(row, tree):
     if 'label' in tree:
         return tree['label']
-
-    # Si no se alcanza una hoja, continuar con la recursión en el subárbol correspondiente
-    if inputs[tree['feature_idx']] < tree['threshold']:
-        return self._predict(inputs, tree['left'])
     else:
-        return self._predict(inputs, tree['right'])
+        if float(row[headers.index(tree['feature'])]) <= tree['value']:
+            return classify(row, tree['left'])
+        else:
+            return classify(row, tree['right'])
+        
+def entropy(data):
+    counts = count_labels(data)
+    proportions = [count / len(data) for count in counts]
+    return -sum(p * math.log2(p) for p in proportions if p > 0)
 
-def _best_split(self, X, y, feature_idxs):
-    best_gain = -1
-    best_feature_idx = None
-    best_threshold = None
-    n_samples, n_features = X.shape
+def information_gain(data, feature_index, value):
+    left_data = [row for row in data if float(row[feature_index]) <= value]
+    right_data = [row for row in data if float(row[feature_index]) > value]
+    left_entropy = entropy(left_data)
+    right_entropy = entropy(right_data)
+    return entropy(data) - (len(left_data) / len(data)) * left_entropy - (len(right_data) / len(data)) * right_entropy
 
-    for i in feature_idxs:
-        thresholds = np.unique(X[:, i])
-        for threshold in thresholds:
-            gain = self._information_gain(y, X[:, i], threshold)
-            if gain > best_gain:
-                best_gain = gain
-                best_feature_idx = i
-                best_threshold = threshold
+tree = build_tree(train_data, depth=5)
 
-    if best_feature_idx is not None:
-        return best_feature_idx, best_threshold
-    else:
-        return None, None
+best_tree = None
+best_accuracy = 0
+for depth in range(1, 11):
+    tree = build_tree(train_data, depth=depth)
+    acc = accuracy(val_data, tree)
+    if acc > best_accuracy:
+        best_tree = tree
+        best_accuracy = acc
 
-def _information_gain(self, y, feature, threshold):
-    # Calcular la entropía antes de la división
-    parent_entropy = self._entropy(y)
+accuracy = accuracy(test_data, best_tree)
+print('Accuracy: %.2f' % accuracy)
 
-    # Calcular la entropía después de la división
-    left_idxs = feature < threshold
-    right_idxs = feature >= threshold
-    left_entropy = self._entropy(y[left_idxs])
-    right_entropy = self._entropy(y[right_idxs])
-    child_entropy = (sum(left_idxs) / len(feature)) * left_entropy + (sum(right_idxs) / len(feature)) * right_entropy
 
-    # Devolver la ganancia de información
-    return parent_entropy - child_entropy
 
-def _entropy(self, y):
-    n_samples = len(y)
-    _, counts = np.unique(y, return_counts=True)
-    probs = counts / n_samples
-    return sum(-p * np.log2(p) for p in probs if p > 0)
 
-def _majority_label(self, y):
-    _, counts = np.unique(y, return_counts=True)
-    return max(zip(counts, range(len(counts))))[1]
-
-# Instanciar un modelo de Árboles de Decisión
-tree = DecisionTree(max_depth=10, min_samples_split=2)
-
-# Ajustar el modelo con los datos de entrenamiento
-tree.fit(X_train, y_train)
-
-# Hacer predicciones en el conjunto de prueba
-y_pred = tree.predict(X_test)
-
-# Calcular la precisión del modelo
-accuracy = accuracy_score(y_test, y_pred)
-
-print(f'Precisión del modelo: {accuracy}')
 
