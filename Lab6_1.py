@@ -2,137 +2,132 @@ import csv
 import random
 import math
 
-# Paso 1: Importar y leer el dataset
-filename = 'high_diamond_ranked_10min.csv'
-dataset = []
-with open(filename, 'r') as csvfile:
-    csvreader = csv.reader(csvfile)
-    headers = next(csvreader)
-    for row in csvreader:
-        dataset.append(row)
+# Cargar los datos desde el archivo CSV
+def load_csv(filename):
+    dataset = []
+    with open(filename, 'r') as file:
+        csv_reader = csv.reader(file)
+        for row in csv_reader:
+            if not row:
+                continue
+            dataset.append(row)
+    return dataset
 
-# Paso 2: Dividir el dataset en conjunto de entrenamiento, validación y prueba
-def split_dataset(dataset, split_ratio):
-    train_size = int(len(dataset) * split_ratio[0])
-    valid_size = int(len(dataset) * split_ratio[1])
+# Convertir las columnas de strings a números
+def convert_to_float(dataset, column):
+    for row in dataset:
+        row[column] = float(row[column])
+
+# Dividir los datos en conjuntos de entrenamiento, validación y prueba
+def split_dataset(dataset, train_percent, validation_percent):
+    train_size = int(len(dataset) * train_percent)
+    validation_size = int(len(dataset) * validation_percent)
+    test_size = len(dataset) - train_size - validation_size
     train_set = []
-    valid_set = []
-    test_set = list(dataset)
-    while len(train_set) < train_size:
-        index = random.randrange(len(test_set))
-        train_set.append(test_set.pop(index))
-    while len(valid_set) < valid_size:
-        index = random.randrange(len(test_set))
-        valid_set.append(test_set.pop(index))
-    return [train_set, valid_set, test_set]
+    validation_set = []
+    test_set = []
+    dataset_copy = dataset[:]
+    random.shuffle(dataset_copy)
+    for i in range(train_size):
+        train_set.append(dataset_copy[i])
+    for i in range(train_size, train_size+validation_size):
+        validation_set.append(dataset_copy[i])
+    for i in range(train_size+validation_size, len(dataset_copy)):
+        test_set.append(dataset_copy[i])
+    return train_set, validation_set, test_set
 
-split_ratio = [0.8, 0.1, 0.1]
-train_set, valid_set, test_set = split_dataset(dataset, split_ratio)
-
-# Paso 3: Definir las características y la variable objetivo del modelo
-features = ['blueWins', 'blueKills', 'blueTowersDestroyed', 'blueTotalGold', 'blueTotalMinionsKilled', 'redKills', 'redTowersDestroyed', 'redTotalGold', 'redTotalMinionsKilled']
-target = 'blueWins'
-
-# Paso 4: Entrenar el modelo con el conjunto de entrenamiento
-def calc_entropy(dataset, features, target):
-    class_counts = {}
-    for row in dataset:
-        if row[features.index(target)] not in class_counts:
-            class_counts[row[features.index(target)]] = 0
-        class_counts[row[features.index(target)]] += 1
-    entropy = 0
-    for count in class_counts.values():
-        prob = count / float(len(dataset))
-        entropy += -prob * math.log(prob, 2)
-    return entropy
-
-def mode(lst):
-    counter = {}
-    for elem in lst:
-        if elem not in counter:
-            counter[elem] = 0
-        counter[elem] += 1
-    max_count = 0
-    modes = []
-    for k,v in counter.items():
-        if v > max_count:
-            max_count = v
-            modes = [k]
-        elif v == max_count:
-            modes.append(k)
-    return modes[0]
-
-# Paso 4: Entrenar el modelo con el conjunto de entrenamiento
-def build_tree(dataset, features, target):
-    class_values = list(set(row[features.index(target)] for row in dataset))
-    if len(class_values) == 1:
-        return class_values[0]
-    best_feature = None
-    best_gain = 0
-    for feature in features:
-        if feature == target:
-            continue
-        feature_values = list(set(row[features.index(feature)] for row in dataset))
-        entropy = 0
-        for value in feature_values:
-            subset = [row for row in dataset if row[features.index(feature)] == value]
-            prob = len(subset) / float(len(dataset))
-            entropy += prob * calc_entropy(subset, features, target)
-        info_gain = calc_entropy(dataset, features, target) - entropy
-        if info_gain > best_gain:
-            best_feature = feature
-            best_gain = info_gain
-    if best_feature == None:
-        return mode([row[features.index(target)] for row in dataset])
-    tree = {best_feature:{}}
-    feature_values = list(set(row[features.index(best_feature)] for row in dataset))
-    for value in feature_values:
-        subset = [row for row in dataset if row[features.index(best_feature)] == value]
-        subtree = build_tree(subset, [f for f in features if f != best_feature], target)
-        tree[best_feature][value] = subtree
-    return tree
-
-tree = build_tree(train_set, features, target)
-
-# Paso 5: Evaluar el modelo con el conjunto de validación
-def predict(tree, row):
-    if type(tree) == str:
-        return tree
-    else:
-        feature = list(tree.keys())[0]
-        if row[features.index(feature)] not in tree[feature]:
-            return mode([row[features.index(target)] for row in train_set])
-        subtree = tree[feature][row[features.index(feature)]]
-        return predict(subtree, row)
-
-def evaluate_accuracy(tree, dataset):
+# Calcular la precisión del modelo
+def accuracy(actual, predicted):
     correct = 0
-    for row in dataset:
-        prediction = predict(tree, row)
-        if prediction == row[features.index(target)]:
+    for i in range(len(actual)):
+        if actual[i] == predicted[i]:
             correct += 1
-    return correct / float(len(dataset))
+    return correct / float(len(actual))
 
-accuracy = evaluate_accuracy(tree, valid_set)
-print("Accuracy on validation set:", accuracy)
+# Clase para construir el árbol de decisión
+class DecisionTree:
+    def __init__(self, max_depth=5):
+        self.max_depth = max_depth
 
-# Paso 6: Ajustar los hiperparámetros del modelo y volver a entrenar y evaluar
-max_depths = [5, 10, 15, 20, 25]
-best_accuracy = 0
-best_tree = None
-for max_depth in max_depths:
-    features = ['blueKills', 'blueTowersDestroyed', 'blueTotalGold', 'blueTotalMinionsKilled', 'redKills', 'redTowersDestroyed', 'redTotalGold', 'redTotalMinionsKilled']
-    target = 'blueWins'
-    tree = build_tree(train_set, features, target)
-    accuracy = evaluate_accuracy(tree, valid_set)
-    if accuracy > best_accuracy:
-        best_accuracy = accuracy
-        best_tree = tree
+    # Calcular la entropía de un conjunto de datos
+    def entropy(self, data):
+        counts = {}
+        for row in data:
+            label = row[-1]
+            if label not in counts:
+                counts[label] = 0
+            counts[label] += 1
+        entropy = 0
+        for label in counts:
+            probability = counts[label] / float(len(data))
+            entropy -= probability * math.log(probability, 2)
+        return entropy
 
-print("Best accuracy on validation set:", best_accuracy)
+    # Dividir los datos en dos conjuntos según el valor de una columna
+    def split_data(self, data, column, value):
+        left = []
+        right = []
+        for row in data:
+            if row[column] < value:
+                left.append(row)
+            else:
+                right.append(row)
+        return left, right
 
-# Paso 7: Evaluar el modelo con el conjunto de prueba
-accuracy = evaluate_accuracy(best_tree, test_set)
-print("Accuracy on test set:", accuracy)
+    # Encontrar el mejor corte para dividir los datos
+    def find_best_split(self, data):
+        best_entropy = float('inf')
+        best_column = None
+        best_value = None
+        for column in range(len(data[0])-1):
+            values = set([row[column] for row in data])
+            for value in values:
+                left, right = self.split_data(data, column, value)
+                if len(left) == 0 or len(right) == 0:
+                    continue
+                entropy = (len(left) / len(data)) * self.entropy(left) + (len(right) / len(data)) * self.entropy(right)
+                if entropy < best_entropy:
+                    best_entropy = entropy
+                    best_column = column
+                    best_value = value
+        return best_column, best_value
 
+    
+        # Construir el árbol de decisión recursivamente
+    def build_tree(self, data, depth=0):
+        if depth >= self.max_depth:
+            return max(set([row[-1] for row in data]), key=[row[-1] for row in data].count)
+        if len(set([row[-1] for row in data])) == 1:
+            return data[0][-1]
+        column, value = self.find_best_split(data)
+        left, right = self.split_data(data, column, value)
+        node = {'column': column, 'value': value}
+        node['left'] = self.build_tree(left, depth+1)
+        node['right'] = self.build_tree(right, depth+1)
+        return node
+
+    # Hacer una predicción utilizando el árbol de decisión
+    def predict(self, row, tree):
+        if isinstance(tree, str):
+            return tree
+        if row[tree['column']] < tree['value']:
+            return self.predict(row, tree['left'])
+        else:
+            return self.predict(row, tree['right'])
+
+
+dataset = load_csv('high_diamond_ranked_10min.csv')
+
+train_set, validation_set, test_set = split_dataset(dataset, 0.8, 0.1)
+
+tree = DecisionTree()
+tree_model = tree.build_tree(train_set)
+actual = [row[-1] for row in validation_set]
+predicted = [tree.predict(row, tree_model) for row in validation_set]
+precision = accuracy(actual, predicted)
+print('Precisión del modelo en el conjunto de validación: {:.2f}%'.format(precision*100))
+actual = [row[-1] for row in test_set]
+predicted = [tree.predict(row, tree_model) for row in test_set]
+precision = accuracy(actual, predicted)
+print('Precisión del modelo en el conjunto de prueba: {:.2f}%'.format(precision*100))
 
