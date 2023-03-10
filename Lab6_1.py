@@ -2,111 +2,137 @@ import csv
 import random
 import math
 
-# Cargar los datos y separar la variable objetivo de las features
-data = []
-with open('high_diamond_ranked_10min.csv') as file:
-    reader = csv.reader(file)
-    headers = next(reader)
-    for row in reader:
-        data.append(row)
+# Paso 1: Importar y leer el dataset
+filename = 'high_diamond_ranked_10min.csv'
+dataset = []
+with open(filename, 'r') as csvfile:
+    csvreader = csv.reader(csvfile)
+    headers = next(csvreader)
+    for row in csvreader:
+        dataset.append(row)
 
-features = ['blueKills', 'blueTowersDestroyed', 'blueTotalGold', 'blueTotalMinionsKilled', 'redKills', 'redTowersDestroyed', 'redTotalGold', 'redTotalMinionsKilled']
+# Paso 2: Dividir el dataset en conjunto de entrenamiento, validación y prueba
+def split_dataset(dataset, split_ratio):
+    train_size = int(len(dataset) * split_ratio[0])
+    valid_size = int(len(dataset) * split_ratio[1])
+    train_set = []
+    valid_set = []
+    test_set = list(dataset)
+    while len(train_set) < train_size:
+        index = random.randrange(len(test_set))
+        train_set.append(test_set.pop(index))
+    while len(valid_set) < valid_size:
+        index = random.randrange(len(test_set))
+        valid_set.append(test_set.pop(index))
+    return [train_set, valid_set, test_set]
+
+split_ratio = [0.8, 0.1, 0.1]
+train_set, valid_set, test_set = split_dataset(dataset, split_ratio)
+
+# Paso 3: Definir las características y la variable objetivo del modelo
+features = ['blueWins', 'blueKills', 'blueTowersDestroyed', 'blueTotalGold', 'blueTotalMinionsKilled', 'redKills', 'redTowersDestroyed', 'redTotalGold', 'redTotalMinionsKilled']
 target = 'blueWins'
 
-# Dividir los datos en conjunto de entrenamiento, validación y prueba
-random.shuffle(data)
-train_size = int(0.8 * len(data))
-val_size = test_size = int(0.1 * len(data))
-train_data = data[:train_size]
-val_data = data[train_size:train_size+val_size]
-test_data = data[train_size+val_size:]
+# Paso 4: Entrenar el modelo con el conjunto de entrenamiento
+def calc_entropy(dataset, features, target):
+    class_counts = {}
+    for row in dataset:
+        if row[features.index(target)] not in class_counts:
+            class_counts[row[features.index(target)]] = 0
+        class_counts[row[features.index(target)]] += 1
+    entropy = 0
+    for count in class_counts.values():
+        prob = count / float(len(dataset))
+        entropy += -prob * math.log(prob, 2)
+    return entropy
 
-# Función para contar las etiquetas (0 o 1) en un conjunto de datos
-def count_labels(data):
-    counts = [0, 0]
-    for row in data:
-        if len(row) > 0:
-            counts[int(row[0])] += 1
-    return counts
+def mode(lst):
+    counter = {}
+    for elem in lst:
+        if elem not in counter:
+            counter[elem] = 0
+        counter[elem] += 1
+    max_count = 0
+    modes = []
+    for k,v in counter.items():
+        if v > max_count:
+            max_count = v
+            modes = [k]
+        elif v == max_count:
+            modes.append(k)
+    return modes[0]
 
-# Función para calcular la precisión del modelo en un conjunto de datos
-def accuracy(data, tree):
-    correct = 0
-    for row in data:
-        prediction = classify(row, tree)
-        if prediction == int(row[0]):
-            correct += 1
-    return correct / len(data)
-
-# Función para construir el árbol de decisión
-def build_tree(data, depth):
-    # Si todos los ejemplos tienen la misma etiqueta, devolver un nodo hoja
-    labels = [int(row[0]) for row in data]
-    if len(set(labels)) == 1:
-        return {'label': labels[0]}
-
-    # Si se llega a la profundidad máxima, devolver un nodo hoja con la etiqueta más común
-    if depth == 0:
-        return {'label': max(set(labels), key=labels.count)}
-
-    # Encontrar la mejor feature y punto de división
+# Paso 4: Entrenar el modelo con el conjunto de entrenamiento
+def build_tree(dataset, features, target):
+    class_values = list(set(row[features.index(target)] for row in dataset))
+    if len(class_values) == 1:
+        return class_values[0]
     best_feature = None
-    best_value = None
     best_gain = 0
-    for i in range(1, len(data[0])):
-        values = set([float(row[i]) for row in data])
-        for value in values:
-            gain = information_gain(data, i, value)
-            if gain > best_gain:
-                best_feature = i
-                best_value = value
-                best_gain = gain
+    for feature in features:
+        if feature == target:
+            continue
+        feature_values = list(set(row[features.index(feature)] for row in dataset))
+        entropy = 0
+        for value in feature_values:
+            subset = [row for row in dataset if row[features.index(feature)] == value]
+            prob = len(subset) / float(len(dataset))
+            entropy += prob * calc_entropy(subset, features, target)
+        info_gain = calc_entropy(dataset, features, target) - entropy
+        if info_gain > best_gain:
+            best_feature = feature
+            best_gain = info_gain
+    if best_feature == None:
+        return mode([row[features.index(target)] for row in dataset])
+    tree = {best_feature:{}}
+    feature_values = list(set(row[features.index(best_feature)] for row in dataset))
+    for value in feature_values:
+        subset = [row for row in dataset if row[features.index(best_feature)] == value]
+        subtree = build_tree(subset, [f for f in features if f != best_feature], target)
+        tree[best_feature][value] = subtree
+    return tree
 
-    # Dividir el conjunto de datos en dos subconjuntos y construir el árbol recursivamente
-    left_data = [row for row in data if float(row[best_feature]) <= best_value]
-    right_data = [row for row in data if float(row[best_feature]) > best_value]
-    left_tree = build_tree(left_data, depth-1)
-    right_tree = build_tree(right_data, depth-1)
+tree = build_tree(train_set, features, target)
 
-    # Devolver un nodo interno con la feature de división y los subárboles izquierdo y derecho
-    return {'feature': headers[best_feature], 'value': best_value, 'left': left_tree, 'right': right_tree}
-
-def classify(row, tree):
-    if 'label' in tree:
-        return tree['label']
+# Paso 5: Evaluar el modelo con el conjunto de validación
+def predict(tree, row):
+    if type(tree) == str:
+        return tree
     else:
-        if float(row[headers.index(tree['feature'])]) <= tree['value']:
-            return classify(row, tree['left'])
-        else:
-            return classify(row, tree['right'])
-        
-def entropy(data):
-    counts = count_labels(data)
-    proportions = [count / len(data) for count in counts]
-    return -sum(p * math.log2(p) for p in proportions if p > 0)
+        feature = list(tree.keys())[0]
+        if row[features.index(feature)] not in tree[feature]:
+            return mode([row[features.index(target)] for row in train_set])
+        subtree = tree[feature][row[features.index(feature)]]
+        return predict(subtree, row)
 
-def information_gain(data, feature_index, value):
-    left_data = [row for row in data if float(row[feature_index]) <= value]
-    right_data = [row for row in data if float(row[feature_index]) > value]
-    left_entropy = entropy(left_data)
-    right_entropy = entropy(right_data)
-    return entropy(data) - (len(left_data) / len(data)) * left_entropy - (len(right_data) / len(data)) * right_entropy
+def evaluate_accuracy(tree, dataset):
+    correct = 0
+    for row in dataset:
+        prediction = predict(tree, row)
+        if prediction == row[features.index(target)]:
+            correct += 1
+    return correct / float(len(dataset))
 
-tree = build_tree(train_data, depth=5)
+accuracy = evaluate_accuracy(tree, valid_set)
+print("Accuracy on validation set:", accuracy)
 
-best_tree = None
+# Paso 6: Ajustar los hiperparámetros del modelo y volver a entrenar y evaluar
+max_depths = [5, 10, 15, 20, 25]
 best_accuracy = 0
-for depth in range(1, 11):
-    tree = build_tree(train_data, depth=depth)
-    acc = accuracy(val_data, tree)
-    if acc > best_accuracy:
+best_tree = None
+for max_depth in max_depths:
+    features = ['blueKills', 'blueTowersDestroyed', 'blueTotalGold', 'blueTotalMinionsKilled', 'redKills', 'redTowersDestroyed', 'redTotalGold', 'redTotalMinionsKilled']
+    target = 'blueWins'
+    tree = build_tree(train_set, features, target)
+    accuracy = evaluate_accuracy(tree, valid_set)
+    if accuracy > best_accuracy:
+        best_accuracy = accuracy
         best_tree = tree
-        best_accuracy = acc
 
-accuracy = accuracy(test_data, best_tree)
-print('Accuracy: %.2f' % accuracy)
+print("Best accuracy on validation set:", best_accuracy)
 
-
-
+# Paso 7: Evaluar el modelo con el conjunto de prueba
+accuracy = evaluate_accuracy(best_tree, test_set)
+print("Accuracy on test set:", accuracy)
 
 
