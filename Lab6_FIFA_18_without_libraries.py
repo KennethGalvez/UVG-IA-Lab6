@@ -124,7 +124,7 @@ class DecisionTree:
             return self.predict(row, tree["right"])
 
 
-dataset = load_csv("CompleteDataset.csv")
+dataset = load_csv('cleaned_data.csv')
 
 train_set, validation_set, test_set = split_dataset(dataset, 0.8, 0.1)
 
