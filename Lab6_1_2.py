@@ -46,3 +46,4 @@ plt.show()
 y_pred = model.predict(X_test)
 accuracy = accuracy_score(y_test, y_pred)
 print("Precisión de las predicciones:", accuracy)
+

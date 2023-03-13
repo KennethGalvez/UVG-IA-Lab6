@@ -125,9 +125,9 @@ tree_model = tree.build_tree(train_set)
 actual = [row[-1] for row in validation_set]
 predicted = [tree.predict(row, tree_model) for row in validation_set]
 precision = accuracy(actual, predicted)
-print('Precisión del modelo en el conjunto de validación: {:.2f}%'.format(precision*100))
+print('Precisión del modelo de validación: {:.2f}%'.format(precision*100))
 actual = [row[-1] for row in test_set]
 predicted = [tree.predict(row, tree_model) for row in test_set]
 precision = accuracy(actual, predicted)
-print('Precisión del modelo en el conjunto de prueba: {:.2f}%'.format(precision*100))
+print('Precisión del modelo de prueba: {:.2f}%'.format(precision*100))
 
