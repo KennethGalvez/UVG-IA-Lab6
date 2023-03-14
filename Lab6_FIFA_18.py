@@ -6,6 +6,11 @@ from sklearn.metrics import r2_score
 import matplotlib.pyplot as plt
 import re
 from ydata_profiling import ProfileReport
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import Ridge
 
 
 def compute_operation(cell):
@@ -116,3 +121,39 @@ y_test_pred = best_model.predict(test_x)
 # Clacular el puntaje R2 en el set de testing
 print("Puntaje R2 en set de testing usando el mejor modelo: ",
       r2_score(test_y, y_test_pred))
+'''
+
+# Definir el pipeline de preprocesamiento y modelo
+pipeline = make_pipeline(
+    StandardScaler(),
+    Ridge()
+)
+
+# Ajustar los hiperparámetros
+params = {
+    "ridge__alpha": [0.001, 0.01, 0.1, 1, 10, 100],
+    "ridge__max_iter": [100, 500, 1000],
+    "ridge__tol": [1e-4, 1e-3, 1e-2],
+    "ridge__solver": ['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga'],
+    "ridge__random_state": [42]
+}
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+grid_search = GridSearchCV(
+    pipeline, params, cv=cv, n_jobs=-1, scoring='r2'
+)
+grid_search.fit(pd.concat([train_x, val_x]), pd.concat([train_y, val_y]))
+
+print("Mejores hiperparámetros: ", grid_search.best_params_)
+
+# Predecir en el set de testing usando el mejor modelo encontrado con grid Search
+best_model = grid_search.best_estimator_
+y_test_pred = best_model.predict(test_x)
+
+# Clacular el puntaje R2 en el set de testing
+print("Puntaje R2 en set de testing usando el mejor modelo: ",
+      r2_score(test_y, y_test_pred))
+
+Mejores hiperparámetros:  {'ridge__alpha': 10, 'ridge__max_iter': 100, 'ridge__random_state': 42, 'ridge__solver': 'lsqr', 'ridge__tol': 0.0001}
+Puntaje R2 en set de testing usando el mejor modelo:  0.5544535595861562
+'''
