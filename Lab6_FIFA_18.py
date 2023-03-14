@@ -29,10 +29,10 @@ def compute_operation(cell):
 data = pd.read_csv("CompleteDataset.csv", low_memory=False)
 
 # Generar un informe detallado de los datos
-profile = ProfileReport(data, title="CompleteDataset", explorative=True)
+# profile = ProfileReport(data, title="CompleteDataset", explorative=True)
 
 # Guardar el informe en un archivo HTML
-profile.to_file("CompleteDataset.html")
+# profile.to_file("CompleteDataset.html")
 
 # Aplicar la función compute_operation a todas las columnas
 data = data.applymap(compute_operation)
@@ -84,18 +84,18 @@ importances = model.feature_importances_
 indices = np.argsort(importances)[::-1]
 
 # Mostrar las 5 características principales
-print("Top 5 features:")
+print("Top 5 características principales:")
 for f in range(5):
     print("%d. %s (%f)" %
           (f + 1, train_x.columns[indices[f]], importances[indices[f]]))
 
 # Evaluar el modelo en el conjunto de validación
 y_val_pred = model.predict(val_x)
-print("R2 score on validation set: ", r2_score(val_y, y_val_pred))
+print("Puntaje R2 en set de validación: ", r2_score(val_y, y_val_pred))
 
 # Evaluar el modelo en el conjunto de prueba
 y_test_pred = model.predict(test_x)
-print("R2 score on test set: ", r2_score(test_y, y_test_pred))
+print("Puntaje R2 en set de testing: ", r2_score(test_y, y_test_pred))
 
 # Ajustar los hiperparámetros
 params = {
@@ -107,11 +107,12 @@ grid_search = GridSearchCV(
 )
 grid_search.fit(pd.concat([train_x, val_x]), pd.concat([train_y, val_y]))
 
-print("Best hyperparameters: ", grid_search.best_params_)
+print("Mejores hiperparámetros: ", grid_search.best_params_)
 
 # Predecir en el set de testing usando el mejor modelo encontrado con grid Search
 best_model = grid_search.best_estimator_
 y_test_pred = best_model.predict(test_x)
 
 # Clacular el puntaje R2 en el set de testing
-print("R2 score on test set using best model: ", r2_score(test_y, y_test_pred))
+print("Puntaje R2 en set de testing usando el mejor modelo: ",
+      r2_score(test_y, y_test_pred))
