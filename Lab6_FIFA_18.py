@@ -91,15 +91,23 @@ indices = np.argsort(importances)[::-1]
 # Mostrar las 5 características principales
 print("Top 5 características principales:")
 for f in range(5):
-    print("%d. %s (%f)" %
-          (f + 1, train_x.columns[indices[f]], importances[indices[f]]))
+    print("%d. %s (%f)" % (f + 1, train_x.columns[indices[f]], importances[indices[f]]))
 
 # Evaluar el modelo en el conjunto de validación
 y_val_pred = model.predict(val_x)
 print("Puntaje R2 en set de validación: ", r2_score(val_y, y_val_pred))
 
-# Evaluar el modelo en el conjunto de prueba
-y_test_pred = model.predict(test_x)
+# Define the pipeline with StandardScaler and Ridge model
+pipeline = make_pipeline(
+    StandardScaler(),
+    Ridge(alpha=10, max_iter=100, tol=0.0001, solver="lsqr", random_state=42),
+)
+
+# Fit the pipeline on the training data
+pipeline.fit(train_x, train_y)
+
+# Make predictions on the test data using the fitted pipeline
+y_test_pred = pipeline.predict(test_x)
 print("Puntaje R2 en set de testing: ", r2_score(test_y, y_test_pred))
 
 # Ajustar los hiperparámetros
@@ -119,9 +127,11 @@ best_model = grid_search.best_estimator_
 y_test_pred = best_model.predict(test_x)
 
 # Clacular el puntaje R2 en el set de testing
-print("Puntaje R2 en set de testing usando el mejor modelo: ",
-      r2_score(test_y, y_test_pred))
-'''
+print(
+    "Puntaje R2 en set de testing usando el mejor modelo: ",
+    r2_score(test_y, y_test_pred),
+)
+"""
 
 # Definir el pipeline de preprocesamiento y modelo
 pipeline = make_pipeline(
@@ -156,4 +166,4 @@ print("Puntaje R2 en set de testing usando el mejor modelo: ",
 
 Mejores hiperparámetros:  {'ridge__alpha': 10, 'ridge__max_iter': 100, 'ridge__random_state': 42, 'ridge__solver': 'lsqr', 'ridge__tol': 0.0001}
 Puntaje R2 en set de testing usando el mejor modelo:  0.5544535595861562
-'''
+"""
