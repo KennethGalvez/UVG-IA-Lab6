@@ -1,5 +1,7 @@
 # UVG-IA-Lab6
 
+## Task 1.1
+
 - Decidimos usar la entropía por que es fácil de calcular y nos sirvio para seleccionar la mejor variable para dividir en cada nodo del árbol.
 
 - Para seleccionar los features nos vasamos en la opinion de nuestro integrante Kenneth Galvez quien ha llegado a ser Platino en el juego https://www.op.gg/summoners/lan/Kydamo
